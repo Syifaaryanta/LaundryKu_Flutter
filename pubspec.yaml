@@ -45,6 +45,7 @@ dependencies:
   
   # Camera & Image
   image_picker: ^1.1.2
+  file_picker: ^8.1.6
   path_provider: ^2.1.3
   
   # Notifications
@@ -55,6 +56,10 @@ dependencies:
   
   # Date & Time
   intl: ^0.19.0
+  
+  # Export
+  excel: ^4.0.6
+  share_plus: ^10.1.2
   
   # UUID Generator
   uuid: ^4.4.2

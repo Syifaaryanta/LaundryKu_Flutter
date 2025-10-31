@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 import '../models/order.dart';
 import '../services/database_service.dart';
+import '../services/notification_service.dart';
 
 /// Provider untuk mengelola state Order
 /// Menggunakan ChangeNotifier untuk memberitahu UI saat ada perubahan data
 class OrderProvider extends ChangeNotifier {
   // Database service instance
   final DatabaseService _dbService = DatabaseService();
+  final NotificationService _notificationService = NotificationService();
 
   // List semua orders (state)
   List<Order> _orders = [];
@@ -47,7 +49,7 @@ class OrderProvider extends ChangeNotifier {
   }
 
   // ==========================================
-  // 📋 LOAD DATA
+  // LOAD DATA
   // ==========================================
 
   /// Load semua orders dari database
@@ -227,6 +229,23 @@ class OrderProvider extends ChangeNotifier {
       final index = _orders.indexWhere((o) => o.id == orderId);
       if (index != -1) {
         _orders[index] = updatedOrder;
+      }
+
+      // Kirim notifikasi jika status menjadi selesai
+      if (nextStatus == OrderStatus.selesai) {
+        try {
+          // Get customer name untuk notifikasi
+          final customer = await _dbService.getCustomerById(order.customerId);
+          if (customer != null) {
+            await _notificationService.showPickupReadyNotification(
+              orderId: orderId,
+              customerName: customer.name,
+            );
+          }
+        } catch (e) {
+          debugPrint('Failed to send notification: $e');
+          // Don't fail the whole operation if notification fails
+        }
       }
 
       notifyListeners(); // Beritahu UI

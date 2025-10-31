@@ -86,17 +86,17 @@ class DatabaseService {
       )
     ''');
 
-    print('✅ Database tables created successfully');
+    print('Database tables created successfully');
   }
 
-  // 🔹 UPGRADE DATABASE (jika ada perubahan skema di versi baru)
+  // UPGRADE DATABASE (jika ada perubahan skema di versi baru)
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     // Untuk future updates
     // Contoh: if (oldVersion < 2) { ... }
   }
 
   // ==========================================
-  // 📋 CUSTOMER OPERATIONS (CRUD)
+  // CUSTOMER OPERATIONS (CRUD)
   // ==========================================
 
   /// CREATE: Tambah customer baru
@@ -157,7 +157,7 @@ class DatabaseService {
   }
 
   // ==========================================
-  // 📦 ORDER OPERATIONS (CRUD)
+  // ORDER OPERATIONS (CRUD)
   // ==========================================
 
   /// CREATE: Tambah order baru
@@ -235,7 +235,7 @@ class DatabaseService {
   }
 
   // ==========================================
-  // 💰 PAYMENT OPERATIONS (CRUD)
+  // PAYMENT OPERATIONS (CRUD)
   // ==========================================
 
   /// CREATE: Tambah payment baru
@@ -364,7 +364,7 @@ class DatabaseService {
     await db.delete(tablePayments);
     await db.delete(tableOrders);
     await db.delete(tableCustomers);
-    print('✅ All data cleared');
+    print('All data cleared');
   }
 
   /// CLOSE: Tutup database connection

@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
+import 'dart:io';
 import '../providers/order_provider.dart';
 import '../providers/customer_provider.dart';
+import '../providers/payment_provider.dart';
 import '../models/order.dart';
 import '../models/customer.dart';
 
@@ -418,12 +424,78 @@ class OrderCard extends StatelessWidget {
                 ),
                 if (order.photoUrl != null)
                   Expanded(
-                    child: _buildDetailItem(
-                      Icons.photo_camera,
-                      'Ada foto',
+                    child: InkWell(
+                      onTap: () => _showPhotoDialog(context),
+                      child: _buildDetailItem(
+                        Icons.photo_camera,
+                        'Lihat foto',
+                        color: Colors.blue,
+                      ),
                     ),
                   ),
               ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Payment Status
+            Consumer<PaymentProvider>(
+              builder: (context, paymentProvider, _) {
+                final totalPaid = paymentProvider.getTotalPaidForOrder(order.id!);
+                final remaining = order.price - totalPaid;
+                final isFullyPaid = remaining <= 0;
+
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isFullyPaid ? Colors.green.shade50 : Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isFullyPaid ? Colors.green : Colors.orange,
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isFullyPaid ? Icons.check_circle : Icons.warning,
+                        color: isFullyPaid ? Colors.green : Colors.orange,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isFullyPaid ? 'Lunas' : 'Belum Lunas',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isFullyPaid ? Colors.green.shade700 : Colors.orange.shade700,
+                              ),
+                            ),
+                            if (!isFullyPaid)
+                              Text(
+                                'Sisa: Rp ${remaining.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.orange.shade700,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        'Rp ${totalPaid.toStringAsFixed(0)} / Rp ${order.price.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
 
             // Progress Button
@@ -514,19 +586,48 @@ class OrderCard extends StatelessWidget {
     }
   }
 
-  Widget _buildDetailItem(IconData icon, String text) {
+  Widget _buildDetailItem(IconData icon, String text, {Color? color}) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: Colors.grey[600]),
+        Icon(icon, size: 16, color: color ?? Colors.grey[600]),
         const SizedBox(width: 4),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(fontSize: 12),
+            style: TextStyle(fontSize: 12, color: color),
             overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
+    );
+  }
+
+  void _showPhotoDialog(BuildContext context) {
+    if (order.photoUrl == null) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppBar(
+              title: const Text('Foto Dokumentasi'),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
+              automaticallyImplyLeading: false,
+            ),
+            InteractiveViewer(
+              child: Image.file(
+                File(order.photoUrl!),
+                fit: BoxFit.contain,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -545,12 +646,135 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
   final _weightController = TextEditingController();
   final _priceController = TextEditingController();
   ServiceType _selectedServiceType = ServiceType.kiloan;
+  String? _photoPath;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void dispose() {
     _weightController.dispose();
     _priceController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        await _saveImage(image.path);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Kamera tidak tersedia. Silakan pilih dari galeri.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    try {
+      // Gunakan file_picker untuk Windows yang lebih kompatibel
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        await _saveImage(result.files.single.path!);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memilih foto: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveImage(String sourcePath) async {
+    try {
+      // Simpan foto ke app directory
+      final directory = await getApplicationDocumentsDirectory();
+      final fileName = 'order_${DateTime.now().millisecondsSinceEpoch}${path.extension(sourcePath)}';
+      final savedPath = path.join(directory.path, 'photos', fileName);
+      
+      // Buat folder photos jika belum ada
+      await Directory(path.join(directory.path, 'photos')).create(recursive: true);
+      
+      // Copy file ke lokasi permanent
+      await File(sourcePath).copy(savedPath);
+      
+      setState(() {
+        _photoPath = savedPath;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Foto berhasil ditambahkan'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan foto: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showImageSourceDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pilih Sumber Foto'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.blue),
+              title: const Text('Kamera'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImageFromCamera();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Colors.green),
+              title: const Text('Galeri'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImageFromGallery();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _removePhoto() {
+    setState(() {
+      _photoPath = null;
+    });
   }
 
   @override
@@ -659,6 +883,69 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
                   return null;
                 },
               ),
+              const SizedBox(height: 24),
+
+              // Photo Documentation
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.camera_alt, color: Colors.blue),
+                          SizedBox(width: 8),
+                          Text(
+                            'Foto Dokumentasi Pakaian',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (_photoPath == null)
+                        OutlinedButton.icon(
+                          onPressed: _showImageSourceDialog,
+                          icon: const Icon(Icons.add_a_photo),
+                          label: const Text('Tambah Foto'),
+                        )
+                      else
+                        Column(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(_photoPath!),
+                                height: 200,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                TextButton.icon(
+                                  onPressed: _showImageSourceDialog,
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Ganti Foto'),
+                                ),
+                                TextButton.icon(
+                                  onPressed: _removePhoto,
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  label: const Text('Hapus', style: TextStyle(color: Colors.red)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 32),
 
               // Save Button
@@ -695,6 +982,7 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
         weight: double.parse(_weightController.text),
         serviceType: _selectedServiceType,
         price: double.parse(_priceController.text),
+        photoUrl: _photoPath,
       );
 
       if (success) {

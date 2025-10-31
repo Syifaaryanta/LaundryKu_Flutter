@@ -24,13 +24,25 @@ class PaymentProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   int get totalPayments => _payments.length;
 
+  /// Get total pembayaran untuk order tertentu
+  double getTotalPaidForOrder(int orderId) {
+    return _payments
+        .where((payment) => payment.orderId == orderId)
+        .fold(0.0, (sum, payment) => sum + payment.amount);
+  }
+
+  /// Get daftar payments untuk order tertentu
+  List<Payment> getPaymentsForOrder(int orderId) {
+    return _payments.where((payment) => payment.orderId == orderId).toList();
+  }
+
   // 🔹 CONSTRUCTOR: Load data saat provider pertama kali dibuat
   PaymentProvider() {
     loadPayments();
   }
 
   // ==========================================
-  // 📋 LOAD DATA
+  // LOAD DATA
   // ==========================================
 
   /// Load semua payments dari database
@@ -337,7 +349,7 @@ class PaymentProvider extends ChangeNotifier {
   }
 
   // ==========================================
-  // 💰 OUTSTANDING PAYMENTS (Belum Dibayar)
+  // OUTSTANDING PAYMENTS (Belum Dibayar)
   // ==========================================
 
   /// Get unpaid orders (orders yang belum ada payment-nya)

@@ -8,6 +8,20 @@ import '../models/payment.dart';
 import '../models/order.dart';
 import '../models/customer.dart';
 
+// Helper function untuk payment icon
+IconData getPaymentIcon(PaymentMethod method) {
+  switch (method) {
+    case PaymentMethod.cash:
+      return Icons.payments;
+    case PaymentMethod.transfer:
+      return Icons.account_balance;
+    case PaymentMethod.qris:
+      return Icons.qr_code;
+    case PaymentMethod.eWallet:
+      return Icons.account_balance_wallet;
+  }
+}
+
 /// Screen untuk menampilkan daftar payment
 class PaymentListScreen extends StatefulWidget {
   const PaymentListScreen({super.key});
@@ -16,14 +30,34 @@ class PaymentListScreen extends StatefulWidget {
   State<PaymentListScreen> createState() => _PaymentListScreenState();
 }
 
-class _PaymentListScreenState extends State<PaymentListScreen> {
+class _PaymentListScreenState extends State<PaymentListScreen> with SingleTickerProviderStateMixin {
   PaymentMethod? _filterMethod;
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Payments'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.list), text: 'Semua Pembayaran'),
+            Tab(icon: Icon(Icons.warning), text: 'Belum Lunas'),
+          ],
+        ),
         actions: [
           // Filter by Payment Method
           PopupMenuButton<PaymentMethod?>(
@@ -138,87 +172,17 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
               ),
             ),
 
-          // Payment List
+          // TabBarView dengan 2 tab
           Expanded(
-            child: Consumer<PaymentProvider>(
-              builder: (context, provider, child) {
-                if (provider.isLoading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (provider.errorMessage != null) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-                        const SizedBox(height: 16),
-                        Text('Error: ${provider.errorMessage}'),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            provider.clearError();
-                            provider.refresh();
-                          },
-                          child: const Text('Coba Lagi'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                List<Payment> payments = provider.payments;
-                if (_filterMethod != null) {
-                  payments = provider.getPaymentsByMethod(_filterMethod!);
-                }
-
-                if (payments.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.payment_outlined, size: 64, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text(
-                          _filterMethod != null
-                              ? 'Tidak ada payment dengan metode ${_getPaymentMethodDisplay(_filterMethod!)}'
-                              : 'Belum ada payment',
-                          style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Payment akan muncul setelah order dibayar',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: payments.length,
-                  itemBuilder: (context, index) {
-                    final payment = payments[index];
-                    return Consumer2<OrderProvider, CustomerProvider>(
-                      builder: (context, orderProvider, customerProvider, _) {
-                        final order = orderProvider.getOrderById(payment.orderId);
-                        final customer = order != null 
-                            ? customerProvider.getCustomerById(order.customerId)
-                            : null;
-                        
-                        return PaymentCard(
-                          payment: payment,
-                          order: order,
-                          customer: customer,
-                          onEdit: () => _showEditPayment(payment),
-                          onDelete: () => _showDeleteConfirmation(payment),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // Tab 1: Semua Pembayaran
+                _buildAllPaymentsTab(),
+                
+                // Tab 2: Order Belum Lunas
+                _buildUnpaidOrdersTab(),
+              ],
             ),
           ),
         ],
@@ -269,6 +233,306 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       case PaymentMethod.eWallet:
         return 'E-Wallet';
     }
+  }
+
+  // Tab 1: Semua Pembayaran
+  Widget _buildAllPaymentsTab() {
+    return Consumer<PaymentProvider>(
+      builder: (context, provider, child) {
+        if (provider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (provider.errorMessage != null) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                const SizedBox(height: 16),
+                Text('Error: ${provider.errorMessage}'),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    provider.clearError();
+                    provider.refresh();
+                  },
+                  child: const Text('Coba Lagi'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        List<Payment> payments = provider.payments;
+        if (_filterMethod != null) {
+          payments = provider.getPaymentsByMethod(_filterMethod!);
+        }
+
+        if (payments.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.payment_outlined, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  _filterMethod != null
+                      ? 'Tidak ada payment dengan metode ${_getPaymentMethodDisplay(_filterMethod!)}'
+                      : 'Belum ada payment',
+                  style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Payment akan muncul setelah order dibayar',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: payments.length,
+          itemBuilder: (context, index) {
+            final payment = payments[index];
+            return Consumer2<OrderProvider, CustomerProvider>(
+              builder: (context, orderProvider, customerProvider, _) {
+                final order = orderProvider.getOrderById(payment.orderId);
+                final customer = order != null 
+                    ? customerProvider.getCustomerById(order.customerId)
+                    : null;
+                
+                return PaymentCard(
+                  payment: payment,
+                  order: order,
+                  customer: customer,
+                  onEdit: () => _showEditPayment(payment),
+                  onDelete: () => _showDeleteConfirmation(payment),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Tab 2: Order Belum Lunas
+  Widget _buildUnpaidOrdersTab() {
+    return Consumer3<OrderProvider, PaymentProvider, CustomerProvider>(
+      builder: (context, orderProvider, paymentProvider, customerProvider, _) {
+        if (orderProvider.isLoading || paymentProvider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        // Get all orders
+        final allOrders = orderProvider.orders;
+        
+        // Filter orders yang belum lunas
+        final unpaidOrders = allOrders.where((order) {
+          final totalPaid = paymentProvider.getTotalPaidForOrder(order.id!);
+          return totalPaid < order.price;
+        }).toList();
+
+        if (unpaidOrders.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.check_circle_outline, size: 64, color: Colors.green[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'Semua Order Sudah Lunas!',
+                  style: TextStyle(fontSize: 18, color: Colors.green[600], fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Tidak ada order dengan pembayaran yang belum lunas',
+                  style: TextStyle(color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: unpaidOrders.length,
+          itemBuilder: (context, index) {
+            final order = unpaidOrders[index];
+            final customer = customerProvider.getCustomerById(order.customerId);
+            final totalPaid = paymentProvider.getTotalPaidForOrder(order.id!);
+            final remaining = order.price - totalPaid;
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.warning, color: Colors.orange, size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                customer?.name ?? 'Customer tidak ditemukan',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              Text(
+                                order.serviceTypeDisplay,
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Payment Info
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange, width: 1),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Total Harga:',
+                                style: TextStyle(color: Colors.grey[700]),
+                              ),
+                              Text(
+                                'Rp ${order.price.toStringAsFixed(0)}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Sudah Dibayar:',
+                                style: TextStyle(color: Colors.grey[700]),
+                              ),
+                              Text(
+                                'Rp ${totalPaid.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  color: Colors.green[700],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Sisa Tagihan:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange[700],
+                                  fontSize: 16,
+                                ),
+                              ),
+                              Text(
+                                'Rp ${remaining.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange[700],
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Action Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showAddPaymentForOrder(order),
+                        icon: const Icon(Icons.payment),
+                        label: const Text('Bayar Sekarang'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+
+                    // Order Details
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          DateFormat('dd MMM yyyy').format(order.date),
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                        const SizedBox(width: 16),
+                        Icon(Icons.monitor_weight, size: 14, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${order.weight} kg',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAddPaymentForOrder(Order order) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddPaymentScreen(preSelectedOrder: order),
+      ),
+    );
   }
 
   void _showAddPayment() {
@@ -360,9 +624,10 @@ class PaymentCard extends StatelessWidget {
             // Header
             Row(
               children: [
-                Text(
-                  payment.paymentIcon,
-                  style: const TextStyle(fontSize: 24),
+                Icon(
+                  getPaymentIcon(payment.paymentMethod),
+                  size: 24,
+                  color: Colors.blue,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -466,7 +731,9 @@ class PaymentCard extends StatelessWidget {
 
 /// Screen untuk tambah payment baru
 class AddPaymentScreen extends StatefulWidget {
-  const AddPaymentScreen({super.key});
+  final Order? preSelectedOrder;
+  
+  const AddPaymentScreen({super.key, this.preSelectedOrder});
 
   @override
   State<AddPaymentScreen> createState() => _AddPaymentScreenState();
@@ -483,6 +750,13 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   @override
   void initState() {
     super.initState();
+    
+    // Set preselected order jika ada
+    if (widget.preSelectedOrder != null) {
+      _selectedOrder = widget.preSelectedOrder;
+      // Akan di-update setelah _loadUnpaidOrders selesai
+    }
+    
     _loadUnpaidOrders();
   }
 
@@ -494,10 +768,35 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   }
 
   void _loadUnpaidOrders() async {
-    final provider = context.read<PaymentProvider>();
-    final orders = await provider.getUnpaidOrders();
+    final paymentProvider = context.read<PaymentProvider>();
+    final orderProvider = context.read<OrderProvider>();
+    
+    // Get all orders
+    final allOrders = orderProvider.orders;
+    
+    // Filter orders yang belum lunas
+    final unpaidOrders = allOrders.where((order) {
+      final totalPaid = paymentProvider.getTotalPaidForOrder(order.id!);
+      return totalPaid < order.price;
+    }).toList();
+    
     setState(() {
-      _unpaidOrders = orders;
+      _unpaidOrders = unpaidOrders;
+      
+      // Pastikan preSelectedOrder ada di list dan set amount
+      if (widget.preSelectedOrder != null) {
+        // Cari order yang sama berdasarkan ID
+        final existingOrder = _unpaidOrders.firstWhere(
+          (o) => o.id == widget.preSelectedOrder!.id,
+          orElse: () => widget.preSelectedOrder!,
+        );
+        _selectedOrder = existingOrder;
+        
+        // Set amount to remaining balance
+        final totalPaid = paymentProvider.getTotalPaidForOrder(_selectedOrder!.id!);
+        final remaining = _selectedOrder!.price - totalPaid;
+        _amountController.text = remaining.toString();
+      }
     });
   }
 
@@ -514,29 +813,40 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
           child: Column(
             children: [
               // Unpaid Orders Dropdown
-              DropdownButtonFormField<Order>(
-                value: _selectedOrder,
+              DropdownButtonFormField<int>(
+                value: _selectedOrder?.id,
                 decoration: const InputDecoration(
                   labelText: 'Pilih Order (Belum Dibayar)',
                   prefixIcon: Icon(Icons.receipt_long),
+                  helperText: 'Pilih order yang ingin dibayar',
                 ),
+                isExpanded: true,
                 items: _unpaidOrders.map((order) {
-                  return DropdownMenuItem(
-                    value: order,
+                  return DropdownMenuItem<int>(
+                    value: order.id,
                     child: Consumer<CustomerProvider>(
                       builder: (context, provider, _) {
                         final customer = provider.getCustomerById(order.customerId);
+                        final totalPaid = context.read<PaymentProvider>().getTotalPaidForOrder(order.id!);
+                        final remaining = order.price - totalPaid;
+                        
                         return Text(
-                          '${customer?.name ?? "Unknown"} - Rp ${order.price.toStringAsFixed(0)}',
+                          '${customer?.name ?? "Unknown"} - ${order.serviceTypeDisplay} (Sisa: Rp ${remaining.toStringAsFixed(0)})',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14),
                         );
                       },
                     ),
                   );
                 }).toList(),
-                onChanged: (order) {
+                onChanged: (orderId) {
+                  final order = _unpaidOrders.firstWhere((o) => o.id == orderId);
                   setState(() {
                     _selectedOrder = order;
-                    _amountController.text = order?.price.toString() ?? '';
+                    // Set amount to remaining balance
+                    final totalPaid = context.read<PaymentProvider>().getTotalPaidForOrder(order.id!);
+                    final remaining = order.price - totalPaid;
+                    _amountController.text = remaining.toString();
                   });
                 },
                 validator: (value) {
@@ -547,6 +857,49 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                 },
               ),
               const SizedBox(height: 16),
+
+              // Info Sisa Tagihan
+              if (_selectedOrder != null)
+                Consumer<PaymentProvider>(
+                  builder: (context, paymentProvider, _) {
+                    final totalPaid = paymentProvider.getTotalPaidForOrder(_selectedOrder!.id!);
+                    final remaining = _selectedOrder!.price - totalPaid;
+                    
+                    return Card(
+                      color: Colors.blue.shade50,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Informasi Pembayaran',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue.shade700,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            _buildInfoRow('Total Harga', _selectedOrder!.price, Colors.grey[700]),
+                            const SizedBox(height: 4),
+                            _buildInfoRow('Sudah Dibayar', totalPaid, Colors.green[700]),
+                            const Divider(height: 16),
+                            _buildInfoRow('Sisa Tagihan', remaining, Colors.orange[700], isBold: true, fontSize: 16),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              
+              if (_selectedOrder != null) const SizedBox(height: 16),
 
               // Payment Method
               DropdownButtonFormField<PaymentMethod>(
@@ -647,6 +1000,30 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
       case PaymentMethod.eWallet:
         return Icons.account_balance_wallet;
     }
+  }
+
+  Widget _buildInfoRow(String label, double amount, Color? color, {bool isBold = false, double fontSize = 14}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          '$label:',
+          style: TextStyle(
+            color: color,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            fontSize: fontSize,
+          ),
+        ),
+        Text(
+          'Rp ${amount.toStringAsFixed(0)}',
+          style: TextStyle(
+            color: color,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+            fontSize: fontSize,
+          ),
+        ),
+      ],
+    );
   }
 
   void _savePayment() async {

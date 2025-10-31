@@ -1,10 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import '../providers/payment_provider.dart';
 import '../providers/order_provider.dart';
+import '../providers/payment_provider.dart';
 import '../providers/customer_provider.dart';
+import '../services/export_service.dart';
 import '../models/order.dart';
 import '../models/payment.dart';
 
@@ -25,6 +27,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       appBar: AppBar(
         title: const Text('Analytics'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: 'Export Report',
+            onPressed: () => _showExportDialog(context),
+          ),
           PopupMenuButton<int>(
             icon: const Icon(Icons.date_range),
             onSelected: (period) {
@@ -476,9 +483,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Row(
                       children: [
-                        Text(
+                        Icon(
                           _getPaymentMethodIcon(entry.key),
-                          style: const TextStyle(fontSize: 20),
+                          size: 20,
+                          color: Colors.blue,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -702,16 +710,97 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
-  String _getPaymentMethodIcon(PaymentMethod method) {
+  IconData _getPaymentMethodIcon(PaymentMethod method) {
     switch (method) {
       case PaymentMethod.cash:
-        return '💵';
+        return Icons.payments;
       case PaymentMethod.transfer:
-        return '🏦';
+        return Icons.account_balance;
       case PaymentMethod.qris:
-        return '📱';
+        return Icons.qr_code;
       case PaymentMethod.eWallet:
-        return '💳';
+        return Icons.account_balance_wallet;
+    }
+  }
+
+  void _showExportDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.download, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Export Data'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Export semua data ke Excel:'),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.table_chart, color: Colors.green),
+              title: const Text('Export ke Excel'),
+              subtitle: const Text('Customers, Orders, Payments & Statistik'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                Navigator.pop(context);
+                _exportToExcel();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportToExcel() async {
+    try {
+      final customerProvider = context.read<CustomerProvider>();
+      final orderProvider = context.read<OrderProvider>();
+      final paymentProvider = context.read<PaymentProvider>();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sedang mengexport data ke Excel...'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+
+      final savedPath = await ExportService.exportAllData(
+        customers: customerProvider.customers,
+        orders: orderProvider.orders,
+        payments: paymentProvider.payments,
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('File berhasil disimpan!\n$savedPath'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Buka Folder',
+              textColor: Colors.white,
+              onPressed: () async {
+                // Buka folder Downloads
+                final directory = savedPath.substring(0, savedPath.lastIndexOf('\\'));
+                await Process.run('explorer', [directory]);
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal export: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

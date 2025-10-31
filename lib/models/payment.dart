@@ -123,17 +123,17 @@ class Payment {
         )}';
   }
 
-  // 🔹 METHOD: Get emoji icon berdasarkan payment method
-  String get paymentIcon {
+  // METHOD: Get icon name berdasarkan payment method
+  String get paymentIconName {
     switch (paymentMethod) {
       case PaymentMethod.cash:
-        return '💵';
+        return 'payments';
       case PaymentMethod.transfer:
-        return '🏦';
+        return 'account_balance';
       case PaymentMethod.qris:
-        return '📱';
+        return 'qr_code';
       case PaymentMethod.eWallet:
-        return '💳';
+        return 'account_balance_wallet';
     }
   }
 

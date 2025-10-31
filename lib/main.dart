@@ -6,18 +6,25 @@ import 'dart:io';
 import 'providers/customer_provider.dart';
 import 'providers/order_provider.dart';
 import 'providers/payment_provider.dart';
+import 'services/notification_service.dart';
 import 'models/order.dart';
 import 'screens/customer_list_screen.dart';
 import 'screens/order_list_screen.dart';
 import 'screens/payment_list_screen.dart';
 import 'screens/analytics_screen.dart';
 
-void main() {
+void main() async {
+  // Ensure Flutter binding is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+  
   // Inisialisasi sqflite untuk desktop (Windows/Linux/Mac)
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
+  
+  // Initialize notification service
+  await NotificationService().initialize();
   
   runApp(const LaundryKuApp());
 }

@@ -29,7 +29,7 @@ class CustomerProvider extends ChangeNotifier {
   }
 
   // ==========================================
-  // 📋 LOAD DATA
+  // LOAD DATA
   // ==========================================
 
   /// Load semua customers dari database
